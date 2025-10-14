@@ -4,7 +4,43 @@ export default function AccountCard({ address }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [marketMap, setMarketMap] = useState({});
 
+  // ✅ fallback map
+  const FALLBACK_MARKET_SYMBOLS = {
+    0: "ETH", 1: "BTC", 2: "SOL", 3: "DOGE", 4: "1000PEPE", 7: "XRP",
+    9: "AVAX", 10: "NEAR", 13: "TAO", 15: "TRUMP", 16: "SUI", 18: "1000BONK",
+    25: "BNB", 29: "ENA", 31: "APT", 37: "PENDLE", 45: "PUMP", 50: "ARB",
+    56: "ZK", 64: "ETHFI", 67: "TIA", 76: "LINEA", 83: "ASTER",
+  };
+
+  // ✅ fetch live market list
+  useEffect(() => {
+    async function fetchMarkets() {
+      try {
+        const res = await fetch("https://mainnet.zklighter.elliot.ai/api/v1/markets");
+        if (!res.ok) throw new Error("Failed to load markets");
+        const json = await res.json();
+
+        const map = {};
+        if (Array.isArray(json.markets)) {
+          json.markets.forEach((m) => {
+            if (m.market_id !== undefined && m.symbol) {
+              map[m.market_id] = m.symbol;
+            }
+          });
+        }
+        setMarketMap(map);
+      } catch (err) {
+        console.warn("⚠️ Market fetch failed — using fallback map");
+        setMarketMap(FALLBACK_MARKET_SYMBOLS);
+      }
+    }
+
+    fetchMarkets();
+  }, []);
+
+  // ✅ fetch wallet data
   useEffect(() => {
     if (!address) return;
 
@@ -25,47 +61,42 @@ export default function AccountCard({ address }) {
 
         const positions = Object.values(account.account_positions?.positions || {});
 
-        const symbolMap = {};
+        // ✅ add symbols + actual leverage
         positions.forEach((p) => {
-          if (p.market_index !== undefined && p.symbol) {
-            symbolMap[p.market_index] = p.symbol;
-          }
+          p.symbol = marketMap[p.market_index] || FALLBACK_MARKET_SYMBOLS[p.market_index] || `#${p.market_index}`;
+          p.actual_leverage = (100 / parseFloat(p.initial_margin_fraction || 0)).toFixed(1);
         });
 
-        const availableBalance = parseFloat(account.account_positions?.available_balance || 0);
-
-        let positionValueTotal = 0;
+        // ✅ compute balances
+        let availableBalance = 0;
+        let totalBalance = 0;
         positions.forEach((p) => {
-          const posVal = parseFloat(p.position_value || 0);
+          const positionValue = parseFloat(p.position_value || 0);
           const marginFrac = parseFloat(p.initial_margin_fraction || 0);
-          if (marginFrac > 0) {
-            const leverage = 100 / marginFrac;
-            positionValueTotal += posVal / leverage;
-          }
+          const leverage = marginFrac > 0 ? 100 / marginFrac : 0;
+          if (leverage > 0) totalBalance += positionValue / leverage;
         });
 
-        const totalBalance = availableBalance + positionValueTotal;
+        if (account.account_positions?.available_balance) {
+          availableBalance = parseFloat(account.account_positions.available_balance);
+          totalBalance += availableBalance;
+        }
 
+        // ✅ recent trades
         const logs = account.account_logs || [];
         const executedTrades = logs
-          .filter(
-            (log) =>
-              log.status === "executed" &&
-              log.pubdata?.trade_pubdata_with_funding
-          )
+          .filter((log) => log.status === "executed" && log.pubdata?.trade_pubdata_with_funding)
           .slice(-2)
           .reverse();
 
         const trades = executedTrades.map((t) => {
           const trade = t.pubdata.trade_pubdata_with_funding;
-          const marketIndex = trade.market_index;
-          const symbol = symbolMap[marketIndex] || `#${marketIndex}`;
+          const symbol = marketMap[trade.market_index] || FALLBACK_MARKET_SYMBOLS[trade.market_index] || `#${trade.market_index}`;
           return {
             symbol,
             entry: parseFloat(trade.price || 0),
             size: Math.abs(parseFloat(trade.size || 0)),
             side: trade.is_taker_ask ? "SHORT" : "LONG",
-            time: t.time,
           };
         });
 
@@ -76,7 +107,6 @@ export default function AccountCard({ address }) {
             closeTrade.side === "LONG"
               ? (closeTrade.entry - entryTrade.entry) * closeTrade.size
               : (entryTrade.entry - closeTrade.entry) * closeTrade.size;
-
           recentTradePnL = {
             symbol: closeTrade.symbol,
             entry: entryTrade.entry,
@@ -87,7 +117,7 @@ export default function AccountCard({ address }) {
 
         setData({ positions, recentTradePnL, availableBalance, totalBalance });
       } catch (err) {
-        console.error("Error fetching account:", err);
+        console.error("❌ Error fetching account:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -95,44 +125,34 @@ export default function AccountCard({ address }) {
     }
 
     fetchAccount();
-  }, [address]);
+  }, [address, marketMap]);
 
   if (loading)
-    return (
-      <div className="text-gray-400 text-sm text-center py-2">
-        Loading data for {address}...
-      </div>
-    );
+    return <div className="text-gray-400 text-sm text-center py-2">Loading data for {address}...</div>;
 
   if (error)
-    return (
-      <div className="text-red-400 text-sm text-center py-2">
-        {error}
-      </div>
-    );
+    return <div className="text-red-400 text-sm text-center py-2">{error}</div>;
 
   const { positions, recentTradePnL, availableBalance, totalBalance } = data;
 
   return (
     <div className="bg-slate-900 rounded-2xl p-6 shadow-lg text-white">
-      {/* Wallet header */}
+      {/* Wallet Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold break-all text-emerald-400">
-          {address}
-        </h2>
+        <h2 className="text-lg font-semibold break-all text-emerald-400">{address}</h2>
         <div className="text-right text-sm">
           <p className="text-slate-400">Tradeable Balance:</p>
           <p className="font-semibold">${availableBalance.toFixed(3)}</p>
           <p className="text-slate-400 mt-1">Total Balance:</p>
-          <p className="font-semibold text-emerald-400">${totalBalance.toFixed(3)}</p>
+          <p className={`font-semibold ${totalBalance >= availableBalance ? "text-green-400" : "text-red-400"}`}>
+            ${totalBalance.toFixed(3)}
+          </p>
         </div>
       </div>
 
       {/* Open Positions */}
       <section>
-        <h3 className="text-md font-semibold mb-2 text-slate-200">
-          Open Positions
-        </h3>
+        <h3 className="text-md font-semibold mb-2 text-slate-200">Open Positions</h3>
         {positions.length > 0 ? (
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -158,14 +178,10 @@ export default function AccountCard({ address }) {
                           : "text-slate-300"
                       }`}
                     >
-                      {p.symbol || `#${p.market_index}`}
+                      {p.symbol} – {p.actual_leverage}x
                     </td>
-                    <td className="p-2 text-right">
-                      {Math.abs(parseFloat(p.size || 0)).toFixed(4)}
-                    </td>
-                    <td className="p-2 text-right">
-                      ${parseFloat(p.entry_price || 0).toFixed(2)}
-                    </td>
+                    <td className="p-2 text-right">{Math.abs(parseFloat(p.size || 0)).toFixed(4)}</td>
+                    <td className="p-2 text-right">${parseFloat(p.entry_price || 0).toFixed(2)}</td>
                     <td
                       className={`p-2 text-right ${
                         pnl >= 0 ? "text-green-400" : "text-red-400"
@@ -186,27 +202,19 @@ export default function AccountCard({ address }) {
       {/* Recent Trade Summary */}
       {recentTradePnL && (
         <section className="mt-6">
-          <h3 className="text-md font-semibold mb-2 text-slate-200">
-            Recent Trade Summary
-          </h3>
+          <h3 className="text-md font-semibold mb-2 text-slate-200">Recent Trade Summary</h3>
           <div className="bg-slate-800 rounded-lg p-4 text-sm">
             <p>
               Token:{" "}
-              <span className="text-slate-100 font-semibold">
-                {recentTradePnL.symbol}
-              </span>
+              <span className="text-slate-100 font-semibold">{recentTradePnL.symbol}</span>
             </p>
             <p>
               Entry Price:{" "}
-              <span className="text-slate-100">
-                ${recentTradePnL.entry.toFixed(2)}
-              </span>
+              <span className="text-slate-100">${recentTradePnL.entry.toFixed(2)}</span>
             </p>
             <p>
               Close Price:{" "}
-              <span className="text-slate-100">
-                ${recentTradePnL.close.toFixed(2)}
-              </span>
+              <span className="text-slate-100">${recentTradePnL.close.toFixed(2)}</span>
             </p>
             <p
               className={`font-semibold ${
