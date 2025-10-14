@@ -13,7 +13,6 @@ export default function AccountCard({ address }) {
         setLoading(true);
         setError(null);
 
-        // ✅ Fetch from Elliot Explorer API
         const res = await fetch(`https://explorer.elliot.ai/api/search?q=${address}`);
         if (!res.ok) throw new Error(`API error: ${res.status}`);
 
@@ -24,10 +23,29 @@ export default function AccountCard({ address }) {
         const account = json.find((a) => a.type === "account");
         if (!account) throw new Error("No account object found");
 
-        // ✅ Extract open positions
         const positions = Object.values(account.account_positions?.positions || {});
 
-        // ✅ Extract recent executed trades (last 2)
+        const symbolMap = {};
+        positions.forEach((p) => {
+          if (p.market_index !== undefined && p.symbol) {
+            symbolMap[p.market_index] = p.symbol;
+          }
+        });
+
+        const availableBalance = parseFloat(account.account_positions?.available_balance || 0);
+
+        let positionValueTotal = 0;
+        positions.forEach((p) => {
+          const posVal = parseFloat(p.position_value || 0);
+          const marginFrac = parseFloat(p.initial_margin_fraction || 0);
+          if (marginFrac > 0) {
+            const leverage = 100 / marginFrac;
+            positionValueTotal += posVal / leverage;
+          }
+        });
+
+        const totalBalance = availableBalance + positionValueTotal;
+
         const logs = account.account_logs || [];
         const executedTrades = logs
           .filter(
@@ -40,7 +58,10 @@ export default function AccountCard({ address }) {
 
         const trades = executedTrades.map((t) => {
           const trade = t.pubdata.trade_pubdata_with_funding;
+          const marketIndex = trade.market_index;
+          const symbol = symbolMap[marketIndex] || `#${marketIndex}`;
           return {
+            symbol,
             entry: parseFloat(trade.price || 0),
             size: Math.abs(parseFloat(trade.size || 0)),
             side: trade.is_taker_ask ? "SHORT" : "LONG",
@@ -48,7 +69,6 @@ export default function AccountCard({ address }) {
           };
         });
 
-        // ✅ Compute PnL between 2 most recent trades
         let recentTradePnL = null;
         if (trades.length === 2) {
           const [entryTrade, closeTrade] = trades;
@@ -58,13 +78,14 @@ export default function AccountCard({ address }) {
               : (entryTrade.entry - closeTrade.entry) * closeTrade.size;
 
           recentTradePnL = {
+            symbol: closeTrade.symbol,
             entry: entryTrade.entry,
             close: closeTrade.entry,
             pnl,
           };
         }
 
-        setData({ positions, recentTradePnL });
+        setData({ positions, recentTradePnL, availableBalance, totalBalance });
       } catch (err) {
         console.error("Error fetching account:", err);
         setError(err.message);
@@ -90,15 +111,24 @@ export default function AccountCard({ address }) {
       </div>
     );
 
-  const { positions, recentTradePnL } = data;
+  const { positions, recentTradePnL, availableBalance, totalBalance } = data;
 
   return (
     <div className="bg-slate-900 rounded-2xl p-6 shadow-lg text-white">
-      <h2 className="text-lg font-semibold mb-3 break-all text-emerald-400">
-        {address}
-      </h2>
+      {/* Wallet header */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold break-all text-emerald-400">
+          {address}
+        </h2>
+        <div className="text-right text-sm">
+          <p className="text-slate-400">Tradeable Balance:</p>
+          <p className="font-semibold">${availableBalance.toFixed(3)}</p>
+          <p className="text-slate-400 mt-1">Total Balance:</p>
+          <p className="font-semibold text-emerald-400">${totalBalance.toFixed(3)}</p>
+        </div>
+      </div>
 
-      {/* Active Positions */}
+      {/* Open Positions */}
       <section>
         <h3 className="text-md font-semibold mb-2 text-slate-200">
           Open Positions
@@ -107,8 +137,7 @@ export default function AccountCard({ address }) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-slate-800">
-                <th className="p-2 text-left">Market</th>
-                <th className="p-2 text-left">Side</th>
+                <th className="p-2 text-left">Token</th>
                 <th className="p-2 text-right">Size</th>
                 <th className="p-2 text-right">Entry</th>
                 <th className="p-2 text-right">PnL</th>
@@ -120,13 +149,16 @@ export default function AccountCard({ address }) {
                 const pnl = parseFloat(p.pnl || 0);
                 return (
                   <tr key={i} className="border-t border-slate-800">
-                    <td className="p-2">{p.symbol || `#${p.market_index}`}</td>
                     <td
                       className={`p-2 font-semibold ${
-                        side === "LONG" ? "text-green-400" : "text-red-400"
+                        side === "LONG"
+                          ? "text-green-400"
+                          : side === "SHORT"
+                          ? "text-red-400"
+                          : "text-slate-300"
                       }`}
                     >
-                      {side}
+                      {p.symbol || `#${p.market_index}`}
                     </td>
                     <td className="p-2 text-right">
                       {Math.abs(parseFloat(p.size || 0)).toFixed(4)}
@@ -158,6 +190,12 @@ export default function AccountCard({ address }) {
             Recent Trade Summary
           </h3>
           <div className="bg-slate-800 rounded-lg p-4 text-sm">
+            <p>
+              Token:{" "}
+              <span className="text-slate-100 font-semibold">
+                {recentTradePnL.symbol}
+              </span>
+            </p>
             <p>
               Entry Price:{" "}
               <span className="text-slate-100">
