@@ -11,19 +11,20 @@ export default function App() {
     const inputAddresses = textareaValue
       .split("\n")
       .map((a) => a.trim())
-      .filter((a) => /^0x[a-fA-F0-9]{40}$/.test(a)); // only valid EVM addresses
+      .filter((a) => /^0x[a-fA-F0-9]{40}$/.test(a));
     setAddresses(inputAddresses);
-    setRefresh((prev) => prev + 1); // ✅ trigger refresh
+    setRefresh((prev) => prev + 1);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 flex items-start justify-center">
       <div className="w-full max-w-5xl bg-slate-900 rounded-2xl p-6 shadow-lg">
         {/* Header */}
-        <header className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <span className="text-emerald-400">Lighter Stats</span>
+        <header className="flex flex-col sm:flex-row items-center justify-between mb-8">
+          <h1 className="text-2xl font-bold text-emerald-400 mb-3 sm:mb-0">
+            Lighter Stats
           </h1>
+
           <a
             href="https://x.com/mashybrid"
             target="_blank"
@@ -42,15 +43,16 @@ export default function App() {
           </a>
         </header>
 
-        {/* Address input */}
+        {/* Input Form */}
         <form onSubmit={handleShow} className="space-y-4">
           <textarea
             value={textareaValue}
             onChange={(e) => setTextareaValue(e.target.value)}
             placeholder="Enter one or more EVM addresses (0x...) — one per line"
-            className="w-full h-32 border border-slate-700 bg-slate-800 rounded-md p-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full h-32 border border-slate-700 bg-slate-800 rounded-md p-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
           />
-          {/* ✅ Centered Glow Button */}
+
+          {/* Centered Button */}
           <div className="flex justify-center">
             <button
               type="submit"
@@ -61,22 +63,22 @@ export default function App() {
           </div>
         </form>
 
-        {/* Display results */}
+        {/* Results */}
         {addresses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
             {addresses.map((addr) => (
               <AccountCard key={addr} address={addr} refresh={refresh} />
             ))}
           </div>
         ) : (
-          <div className="text-slate-400 mt-8 text-center">
+          <div className="text-slate-400 mt-10 text-center">
             Enter one or more addresses above, then click{" "}
-            <span className="text-emerald-400">Show</span> to fetch stats.
+            <span className="text-emerald-400 font-semibold">Show</span> to fetch stats.
           </div>
         )}
 
         {/* Footer */}
-        <footer className="mt-8 text-xs text-slate-500 text-center">
+        <footer className="mt-10 text-xs text-slate-500 text-center border-t border-slate-800 pt-4">
           © 2025 <span className="text-emerald-400 font-semibold">Mass / Mashybrid</span>. Powered by Lighter API.
         </footer>
       </div>
