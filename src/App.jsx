@@ -17,10 +17,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 flex items-start justify-center">
+    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-start py-10 px-4">
+      {/* Main container */}
       <div className="w-full max-w-5xl bg-slate-900 rounded-2xl p-6 shadow-lg">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row items-center justify-between mb-8">
+        <header className="flex flex-col sm:flex-row items-center justify-between mb-8 text-center sm:text-left">
           <h1 className="text-2xl font-bold text-emerald-400 mb-3 sm:mb-0">
             Lighter Stats
           </h1>
@@ -34,7 +35,7 @@ export default function App() {
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 1200 1227"
-              className="w-5 h-5"
+              className="w-6 h-6"
               fill="currentColor"
             >
               <path d="M714 519l453-519h-107L661 460 440 0H0l477 882L0 1227h107l420-481 238 481h440L714 519zm-157 180l-49-90L175 80h184l157 295 49 90 338 636H719L557 699z" />
@@ -43,8 +44,8 @@ export default function App() {
           </a>
         </header>
 
-        {/* Input Form */}
-        <form onSubmit={handleShow} className="space-y-4">
+        {/* Address Input Form */}
+        <form onSubmit={handleShow} className="space-y-6">
           <textarea
             value={textareaValue}
             onChange={(e) => setTextareaValue(e.target.value)}
@@ -52,7 +53,7 @@ export default function App() {
             className="w-full h-32 border border-slate-700 bg-slate-800 rounded-md p-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
           />
 
-          {/* Centered Button */}
+          {/* Centered Show Button */}
           <div className="flex justify-center">
             <button
               type="submit"
@@ -63,7 +64,7 @@ export default function App() {
           </div>
         </form>
 
-        {/* Results */}
+        {/* Wallet Cards */}
         {addresses.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10">
             {addresses.map((addr) => (
@@ -78,8 +79,9 @@ export default function App() {
         )}
 
         {/* Footer */}
-        <footer className="mt-10 text-xs text-slate-500 text-center border-t border-slate-800 pt-4">
-          © 2025 <span className="text-emerald-400 font-semibold">Mass / Mashybrid</span>. Powered by Lighter API.
+        <footer className="mt-12 text-xs text-slate-500 text-center border-t border-slate-800 pt-4">
+          © 2025{" "}
+          <span className="text-emerald-400 font-semibold">Mass / Mashybrid</span>. Powered by Lighter API.
         </footer>
       </div>
     </div>
