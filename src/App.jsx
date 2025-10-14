@@ -11,9 +11,9 @@ export default function App() {
     const inputAddresses = textareaValue
       .split("\n")
       .map((a) => a.trim())
-      .filter((a) => /^0x[a-fA-F0-9]{40}$/.test(a)); // validate EVM addresses
+      .filter((a) => /^0x[a-fA-F0-9]{40}$/.test(a)); // only valid EVM addresses
     setAddresses(inputAddresses);
-    setRefresh((prev) => prev + 1); // trigger refresh even for same addresses
+    setRefresh((prev) => prev + 1); // ✅ trigger refresh
   };
 
   return (
@@ -64,12 +64,13 @@ export default function App() {
         {addresses.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
             {addresses.map((addr) => (
-              <AccountCard key={addr} address={addr} refresh={refresh} />
+              <AccountCard key={addr} address={addr} refresh={refresh} /> // ✅ now passes refresh
             ))}
           </div>
         ) : (
           <div className="text-slate-400 mt-8 text-center">
-            Enter one or more addresses above, then click <span className="text-emerald-400">Show</span> to fetch stats.
+            Enter one or more addresses above, then click{" "}
+            <span className="text-emerald-400">Show</span> to fetch stats.
           </div>
         )}
 
