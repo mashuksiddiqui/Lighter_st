@@ -6,7 +6,7 @@ export default function AccountCard({ address }) {
   const [error, setError] = useState(null);
   const [marketMap, setMarketMap] = useState({});
 
-  // ✅ fallback symbols
+  // fallback symbols
   const FALLBACK_MARKET_SYMBOLS = {
     0: "ETH", 1: "BTC", 2: "SOL", 3: "DOGE", 4: "1000PEPE", 7: "XRP",
     9: "AVAX", 10: "NEAR", 13: "TAO", 15: "TRUMP", 16: "SUI", 18: "1000BONK",
@@ -14,7 +14,7 @@ export default function AccountCard({ address }) {
     56: "ZK", 64: "ETHFI", 67: "TIA", 76: "LINEA", 83: "ASTER",
   };
 
-  // ✅ fetch live markets
+  // fetch live markets (symbol mapping)
   useEffect(() => {
     async function fetchMarkets() {
       try {
@@ -36,7 +36,7 @@ export default function AccountCard({ address }) {
     fetchMarkets();
   }, []);
 
-  // ✅ fetch account + balance
+  // fetch account data & balances
   useEffect(() => {
     if (!address) return;
 
@@ -45,59 +45,86 @@ export default function AccountCard({ address }) {
         setLoading(true);
         setError(null);
 
-        // Step 1: explorer API (positions, logs)
+        // 1) explorer API for positions & logs
         const explorerRes = await fetch(`https://explorer.elliot.ai/api/search?q=${address}`);
-        if (!explorerRes.ok) throw new Error(`API error: ${explorerRes.status}`);
+        if (!explorerRes.ok) throw new Error(`Explorer API error: ${explorerRes.status}`);
         const explorerJson = await explorerRes.json();
+        if (!Array.isArray(explorerJson) || explorerJson.length === 0) {
+          throw new Error("No data found for this address");
+        }
         const account = explorerJson.find((a) => a.type === "account");
-        if (!account) throw new Error("No account found");
+        if (!account) throw new Error("No account object in explorer response");
 
         const positions = Object.values(account.account_positions?.positions || {});
 
-        // Step 2: safe leverage + symbol
+        // assign symbol for each position (use live map or fallback)
         positions.forEach((p) => {
-          p.symbol =
-            marketMap[p.market_index] ||
-            FALLBACK_MARKET_SYMBOLS[p.market_index] ||
-            `#${p.market_index}`;
-
-          const marginFrac = parseFloat(p.initial_margin_fraction);
-          if (!marginFrac || marginFrac === 0) p.actual_leverage = "N/A";
-          else p.actual_leverage = (100 / marginFrac).toFixed(0);
+          p.symbol = marketMap[p.market_index] || FALLBACK_MARKET_SYMBOLS[p.market_index] || `#${p.market_index}`;
         });
 
-        // Step 3: fetch balance info from mainnet.zklighter
+        // 2) mainnet API for balances (preferred authoritative source)
         let availableBalance = 0;
-        let collateral = 0;
+        let totalAssetValue = null; // prefer this if available
         try {
           const mainnetRes = await fetch(
             `https://mainnet.zklighter.elliot.ai/api/v1/account?by=l1_address&value=${address}`
           );
           if (mainnetRes.ok) {
             const mainnetJson = await mainnetRes.json();
-            const acc = mainnetJson.account || mainnetJson.accounts?.[0];
+            // older variations: { account: {...} } or { accounts: [...] }
+            const acc = mainnetJson.account || (Array.isArray(mainnetJson.accounts) && mainnetJson.accounts[0]) || mainnetJson.accounts;
             if (acc) {
-              availableBalance = parseFloat(acc.available_balance || 0);
-              collateral = parseFloat(acc.collateral || 0);
+              // prefer a reported total asset value if present (most accurate)
+              if (acc.total_asset_value !== undefined && acc.total_asset_value !== null && acc.total_asset_value !== "") {
+                totalAssetValue = parseFloat(acc.total_asset_value || 0);
+              } else if (acc.cross_asset_value !== undefined && acc.cross_asset_value !== null && acc.cross_asset_value !== "") {
+                totalAssetValue = parseFloat(acc.cross_asset_value || 0);
+              }
+              // available_balance may be string
+              if (acc.available_balance !== undefined && acc.available_balance !== null && acc.available_balance !== "") {
+                availableBalance = parseFloat(acc.available_balance || 0);
+              }
             }
+          } else {
+            // mainnet fetch failed — we'll fallback below
+            console.warn("mainnet fetch returned", mainnetRes.status);
           }
         } catch (err) {
-          console.warn("⚠️ Balance fetch failed:", err);
+          console.warn("Balance fetch failed:", err);
         }
 
-        // Step 4: compute total balance + overall pnl
-        let totalBalance = availableBalance + collateral;
-        let totalPnL = 0;
+        // 3) total balance calculation:
+        // Prefer reported totalAssetValue from mainnet API if present.
+        // Fallback: availableBalance + sum(position_value / leverage) using position.initial_margin_fraction
+        let totalBalance = null;
+        if (totalAssetValue !== null) {
+          totalBalance = totalAssetValue;
+        } else {
+          // fallback calculation
+          let computed = availableBalance || 0;
+          positions.forEach((p) => {
+            const positionValue = parseFloat(p.position_value || 0);
+            const marginFrac = parseFloat(p.initial_margin_fraction || 0);
+            if (marginFrac > 0) {
+              const leverage = 100 / marginFrac;
+              // add position exposure divided by leverage (as requested)
+              computed += positionValue / leverage;
+            } else {
+              // if no margin fraction, skip contribution (avoid Infinity)
+            }
+          });
+          totalBalance = computed;
+        }
 
+        // 4) compute total PnL (sum unrealized pnl across positions)
+        let totalPnL = 0;
         positions.forEach((p) => {
-          const positionValue = parseFloat(p.position_value || 0);
-          const marginFrac = parseFloat(p.initial_margin_fraction || 0);
-          const leverage = marginFrac > 0 ? 100 / marginFrac : 0;
-          if (leverage > 0) totalBalance += positionValue / leverage;
-          totalPnL += parseFloat(p.pnl || 0);
+          // try unrealized_pnl first (explorer uses p.unrealized_pnl or p.pnl)
+          const pnlValue = parseFloat(p.unrealized_pnl ?? p.pnl ?? 0);
+          totalPnL += isNaN(pnlValue) ? 0 : pnlValue;
         });
 
-        // Step 5: recent trades
+        // 5) recent trades (same logic as before)
         const logs = account.account_logs || [];
         const executedTrades = logs
           .filter((log) => log.status === "executed" && log.pubdata?.trade_pubdata_with_funding)
@@ -106,10 +133,7 @@ export default function AccountCard({ address }) {
 
         const trades = executedTrades.map((t) => {
           const trade = t.pubdata.trade_pubdata_with_funding;
-          const symbol =
-            marketMap[trade.market_index] ||
-            FALLBACK_MARKET_SYMBOLS[trade.market_index] ||
-            `#${trade.market_index}`;
+          const symbol = marketMap[trade.market_index] || FALLBACK_MARKET_SYMBOLS[trade.market_index] || `#${trade.market_index}`;
           return {
             symbol,
             entry: parseFloat(trade.price || 0),
@@ -133,10 +157,16 @@ export default function AccountCard({ address }) {
           };
         }
 
-        setData({ positions, recentTradePnL, availableBalance, totalBalance, totalPnL });
+        setData({
+          positions,
+          recentTradePnL,
+          availableBalance,
+          totalBalance,
+          totalPnL,
+        });
       } catch (err) {
-        console.error("❌ Error fetching account:", err);
-        setError(err.message);
+        console.error("Error fetching account:", err);
+        setError(err.message || "Failed to fetch account");
       } finally {
         setLoading(false);
       }
@@ -147,7 +177,6 @@ export default function AccountCard({ address }) {
 
   if (loading)
     return <div className="text-gray-400 text-sm text-center py-2">Loading data for {address}...</div>;
-
   if (error)
     return <div className="text-red-400 text-sm text-center py-2">{error}</div>;
 
@@ -158,14 +187,14 @@ export default function AccountCard({ address }) {
 
   return (
     <div className="bg-slate-900 rounded-2xl p-6 shadow-lg text-white">
-      {/* Wallet Header */}
+      {/* Wallet header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold break-all text-emerald-400">{address}</h2>
         <div className="text-right text-sm">
           <p className="text-slate-400">Tradeable Balance:</p>
-          <p className="font-semibold">${availableBalance.toFixed(3)}</p>
+          <p className="font-semibold">${(availableBalance || 0).toFixed(3)}</p>
           <p className="text-slate-400 mt-1">Total Balance:</p>
-          <p className={`font-semibold ${balanceColor}`}>${totalBalance.toFixed(3)}</p>
+          <p className={`font-semibold ${balanceColor}`}>${(totalBalance || 0).toFixed(3)}</p>
         </div>
       </div>
 
@@ -184,8 +213,16 @@ export default function AccountCard({ address }) {
             </thead>
             <tbody>
               {positions.map((p, i) => {
-                const side = p.side?.toUpperCase() || "—";
-                const pnl = parseFloat(p.pnl || 0);
+                // explorer positions may store side under 'sign' or 'side'
+                // convert to LONG/SHORT if possible
+                let side = p.side;
+                if (!side && p.sign !== undefined) {
+                  side = parseInt(p.sign, 10) > 0 ? "LONG" : parseInt(p.sign, 10) < 0 ? "SHORT" : undefined;
+                }
+                side = side?.toString().toUpperCase();
+
+                const pnl = parseFloat(p.unrealized_pnl ?? p.pnl ?? 0) || 0;
+
                 return (
                   <tr key={i} className="border-t border-slate-800">
                     <td
@@ -197,19 +234,11 @@ export default function AccountCard({ address }) {
                           : "text-slate-300"
                       }`}
                     >
-                      {p.symbol} – {p.actual_leverage}x
+                      {p.symbol}
                     </td>
-                    <td className="p-2 text-right">
-                      {Math.abs(parseFloat(p.size || 0)).toFixed(4)}
-                    </td>
-                    <td className="p-2 text-right">
-                      ${parseFloat(p.entry_price || 0).toFixed(2)}
-                    </td>
-                    <td
-                      className={`p-2 text-right ${
-                        pnl >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
+                    <td className="p-2 text-right">{Math.abs(parseFloat(p.position || p.size || 0)).toFixed(4)}</td>
+                    <td className="p-2 text-right">${parseFloat(p.avg_entry_price || p.entry_price || p.entry || 0).toFixed(2)}</td>
+                    <td className={`p-2 text-right ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                       ${pnl.toFixed(3)}
                     </td>
                   </tr>
@@ -228,28 +257,15 @@ export default function AccountCard({ address }) {
           <h3 className="text-md font-semibold mb-2 text-slate-200">Recent Trade Summary</h3>
           <div className="bg-slate-800 rounded-lg p-4 text-sm">
             <p>
-              Token:{" "}
-              <span className="text-slate-100 font-semibold">
-                {recentTradePnL.symbol}
-              </span>
+              Token: <span className="text-slate-100 font-semibold">{recentTradePnL.symbol}</span>
             </p>
             <p>
-              Entry Price:{" "}
-              <span className="text-slate-100">
-                ${recentTradePnL.entry.toFixed(2)}
-              </span>
+              Entry Price: <span className="text-slate-100">${recentTradePnL.entry.toFixed(2)}</span>
             </p>
             <p>
-              Close Price:{" "}
-              <span className="text-slate-100">
-                ${recentTradePnL.close.toFixed(2)}
-              </span>
+              Close Price: <span className="text-slate-100">${recentTradePnL.close.toFixed(2)}</span>
             </p>
-            <p
-              className={`font-semibold ${
-                recentTradePnL.pnl >= 0 ? "text-green-400" : "text-red-400"
-              }`}
-            >
+            <p className={`font-semibold ${recentTradePnL.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
               PnL: ${recentTradePnL.pnl.toFixed(3)}
             </p>
           </div>
