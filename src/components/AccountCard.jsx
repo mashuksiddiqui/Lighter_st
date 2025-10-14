@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 
-export default function AccountCard({ address }) {
+export default function AccountCard({ address, refresh }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [marketMap, setMarketMap] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const FALLBACK_MARKET_SYMBOLS = {
     0: "ETH", 1: "BTC", 2: "SOL", 3: "DOGE", 4: "1000PEPE", 7: "XRP",
@@ -13,7 +14,7 @@ export default function AccountCard({ address }) {
     56: "ZK", 64: "ETHFI", 67: "TIA", 76: "LINEA", 83: "ASTER",
   };
 
-  // Fetch live market symbol map
+  // ✅ Fetch live market map
   useEffect(() => {
     async function fetchMarkets() {
       try {
@@ -32,7 +33,7 @@ export default function AccountCard({ address }) {
     fetchMarkets();
   }, []);
 
-  // Fetch account info
+  // ✅ Fetch account data on address OR refresh change
   useEffect(() => {
     if (!address) return;
 
@@ -41,6 +42,7 @@ export default function AccountCard({ address }) {
         setLoading(true);
         setError(null);
 
+        // Step 1: Fetch account info
         const explorerRes = await fetch(`https://explorer.elliot.ai/api/search?q=${address}`);
         if (!explorerRes.ok) throw new Error(`Explorer API error: ${explorerRes.status}`);
         const explorerJson = await explorerRes.json();
@@ -49,9 +51,11 @@ export default function AccountCard({ address }) {
 
         const positions = Object.values(account.account_positions?.positions || {});
         positions.forEach((p) => {
-          p.symbol = marketMap[p.market_index] || FALLBACK_MARKET_SYMBOLS[p.market_index] || `#${p.market_index}`;
+          p.symbol =
+            marketMap[p.market_index] || FALLBACK_MARKET_SYMBOLS[p.market_index] || `#${p.market_index}`;
         });
 
+        // Step 2: Fetch balance info
         let availableBalance = 0;
         let totalAssetValue = null;
         try {
@@ -69,6 +73,7 @@ export default function AccountCard({ address }) {
           }
         } catch {}
 
+        // Step 3: Calculate balances and PnL
         let totalBalance = totalAssetValue ?? availableBalance;
         let totalPnL = 0;
         positions.forEach((p) => {
@@ -76,18 +81,25 @@ export default function AccountCard({ address }) {
           totalPnL += isNaN(pnlVal) ? 0 : pnlVal;
         });
 
+        // ✅ Update data
         setData({ positions, availableBalance, totalBalance, totalPnL });
+        setLastUpdated(new Date().toLocaleTimeString());
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     }
+
     fetchAccount();
-  }, [address, marketMap]);
+  }, [address, marketMap, refresh]); // 👈 refresh added here
 
   if (loading)
-    return <div className="text-gray-400 text-sm text-center py-2">Loading data for {address}...</div>;
+    return (
+      <div className="text-gray-400 text-sm text-center py-2">
+        Loading data for {address}...
+      </div>
+    );
   if (error)
     return <div className="text-red-400 text-sm text-center py-2">{error}</div>;
 
@@ -97,7 +109,7 @@ export default function AccountCard({ address }) {
 
   return (
     <div className="bg-slate-900 rounded-2xl p-6 shadow-lg text-white">
-      {/* Wallet header */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xs font-medium break-all text-emerald-400">{address}</h2>
         <div className="text-right text-sm">
@@ -125,7 +137,12 @@ export default function AccountCard({ address }) {
               {positions.map((p, i) => {
                 let side = p.side;
                 if (!side && p.sign !== undefined)
-                  side = parseInt(p.sign, 10) > 0 ? "LONG" : parseInt(p.sign, 10) < 0 ? "SHORT" : undefined;
+                  side =
+                    parseInt(p.sign, 10) > 0
+                      ? "LONG"
+                      : parseInt(p.sign, 10) < 0
+                      ? "SHORT"
+                      : undefined;
                 side = side?.toUpperCase();
 
                 const pnl = parseFloat(p.unrealized_pnl ?? p.pnl ?? 0) || 0;
@@ -167,6 +184,13 @@ export default function AccountCard({ address }) {
           <p className="text-slate-400">No active positions.</p>
         )}
       </section>
+
+      {/* Last Updated */}
+      {lastUpdated && (
+        <p className="text-xs text-slate-500 mt-3 text-right">
+          Last updated: {lastUpdated}
+        </p>
+      )}
     </div>
   );
 }
