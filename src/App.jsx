@@ -50,10 +50,11 @@ export default function App() {
             placeholder="Enter one or more EVM addresses (0x...) — one per line"
             className="w-full h-32 border border-slate-700 bg-slate-800 rounded-md p-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
-          <div className="flex justify-end">
+          {/* ✅ Centered Glow Button */}
+          <div className="flex justify-center">
             <button
               type="submit"
-              className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-semibold rounded-md shadow disabled:opacity-50 transition"
+              className="px-8 py-2 bg-emerald-500 text-slate-900 font-semibold rounded-full shadow-lg hover:shadow-emerald-500/50 transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-emerald-400 animate-glow"
             >
               Show
             </button>
@@ -64,7 +65,7 @@ export default function App() {
         {addresses.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
             {addresses.map((addr) => (
-              <AccountCard key={addr} address={addr} refresh={refresh} /> // ✅ now passes refresh
+              <AccountCard key={addr} address={addr} refresh={refresh} />
             ))}
           </div>
         ) : (
