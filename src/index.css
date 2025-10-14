@@ -9,7 +9,6 @@
   }
 }
 
-/* Add glowing animation on hover */
 .animate-glow:hover {
   animation: glow 1.5s ease-in-out infinite;
 }
