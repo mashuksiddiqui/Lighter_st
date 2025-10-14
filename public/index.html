@@ -1,12 +1,10 @@
 <!doctype html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lighter Stats</title>
     <link rel="icon" href="/favicon.ico" />
-
-    <!-- ✅ CSP remains unchanged -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
@@ -16,9 +14,7 @@
         img-src 'self' data: https:;"
     />
   </head>
-
   <body class="h-full bg-slate-950 text-slate-100">
-    <!-- ✅ Make root take full height -->
-    <div id="root" class="h-full"></div>
+    <div id="root" class="min-h-full flex flex-col"></div>
   </body>
 </html>
