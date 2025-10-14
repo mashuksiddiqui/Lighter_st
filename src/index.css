@@ -1,3 +1,23 @@
+/* ✅ Import Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ✅ Ensure full height layout works */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* ✅ Optional: Smooth scrolling & nicer font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+/* ✅ Button glow animation */
 @keyframes glow {
   0%, 100% {
     box-shadow: 0 0 10px rgba(16, 185, 129, 0.4),
