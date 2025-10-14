@@ -130,7 +130,7 @@ export default function AccountCard({ address, refresh }) {
                 <th className="p-2 text-left">Token</th>
                 <th className="p-2 text-right">Size</th>
                 <th className="p-2 text-right">Entry</th>
-                <th className="p-2 text-right">PnL ($ / %)</th>
+                <th className="p-2 text-right">PnL</th>
               </tr>
             </thead>
             <tbody>
