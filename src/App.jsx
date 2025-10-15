@@ -30,7 +30,7 @@ export default function App() {
             href="https://x.com/mashybrid"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-blue-400 hover:text-slate-200 transition"
+            className="flex items-center gap-2 text-blue-600 hover:text-slate-300 transition"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
