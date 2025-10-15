@@ -30,7 +30,7 @@ export default function App() {
             href="https://x.com/mashybrid"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition"
+            className="flex items-center gap-2 text-blue-400 hover:text-slate-200 transition"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -81,7 +81,7 @@ export default function App() {
         {/* Footer */}
         <footer className="mt-12 text-xs text-slate-500 text-center border-t border-slate-800 pt-4">
           © 2025{" "}
-          <span className="text-emerald-400 font-semibold">Mass / Mashybrid</span>. Powered by Lighter API.
+          <span className="text-emerald-400 font-semibold">Mass / Mashybrid</span>
         </footer>
       </div>
     </div>
